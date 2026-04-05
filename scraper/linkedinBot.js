@@ -13,10 +13,11 @@ export const runBot = async () => {
   console.log('🚀 Iniciando scraping...');
   console.log('🌐 Abriendo navegador...');
 
-  const browser = await puppeteer.launch({
-    headless: false, // 🔥 cambia a false SOLO para login manual
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  });
+const browser = await puppeteer.launch({
+  headless: false,
+  executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  args: ['--no-sandbox', '--disable-setuid-sandbox']
+});
 
   const page = await browser.newPage();
 
