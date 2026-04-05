@@ -43,11 +43,10 @@ export const runBot = async () => {
 
   // 🔥 SOLO si NO hay cookies → login manual
   if (!hasCookies) {
-    console.log('🔐 Esperando login manual...');
+    console.log('🔐 Logéate manualmente en la ventana...');
 
-    // 👉 Espera hasta que LinkedIn redirija después del login
-    await page.waitForNavigation({
-      waitUntil: 'networkidle2',
+    // ✅ ESPERA HASTA QUE ESTÉS LOGEADO (NUEVO)
+    await page.waitForSelector('div.feed-identity-module', {
       timeout: 0
     });
 
