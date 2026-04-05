@@ -6,22 +6,22 @@ import { sendAlert } from '../services/mailer.js';
 
 const SEARCH_URL = 'https://www.linkedin.com/search/results/content/?keywords=programador&sortBy=DATE_POSTED';
 
-// 🔧 helper delay compatible con puppeteer v24+
+// 🔧 helper delay
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const runBot = async () => {
   console.log('🚀 Iniciando scraping...');
   console.log('🌐 Abriendo navegador...');
 
-const isHeadless = process.env.HEADLESS === 'true';
+  const isHeadless = process.env.HEADLESS === 'true';
 
-const browser = await puppeteer.launch({
-  headless: isHeadless,
-  executablePath: isHeadless
-    ? undefined
-    : '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  args: ['--no-sandbox', '--disable-setuid-sandbox'],
-});
+  const browser = await puppeteer.launch({
+    headless: isHeadless,
+    executablePath: isHeadless
+      ? undefined
+      : '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  });
 
   const page = await browser.newPage();
 
@@ -41,11 +41,20 @@ const browser = await puppeteer.launch({
   console.log('🔐 Abriendo LinkedIn...');
   await page.goto('https://www.linkedin.com/login', { waitUntil: 'networkidle2' });
 
-  await delay(3000);
-
-  // ⚠️ Solo guardar cookies si no existen (evita sobreescribir)
+  // 🔥 SOLO si NO hay cookies → login manual
   if (!hasCookies) {
-    console.log('💾 Guardando cookies (primer login)...');
+    console.log('🔐 Esperando login manual...');
+
+    // 👉 Espera hasta que LinkedIn redirija después del login
+    await page.waitForNavigation({
+      waitUntil: 'networkidle2',
+      timeout: 0
+    });
+
+    console.log('✅ Login detectado');
+
+    // 💾 Guardar cookies DESPUÉS del login
+    console.log('💾 Guardando cookies...');
     const cookies = await page.cookies();
     await fs.writeFile('./scraper/cookies.json', JSON.stringify(cookies, null, 2));
   }
