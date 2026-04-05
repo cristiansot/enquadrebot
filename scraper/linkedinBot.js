@@ -116,3 +116,6 @@ async function autoScroll(page) {
     });
   });
 }
+
+// 👇 Ejecutar bot si se corre directamente
+runBot();
