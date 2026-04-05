@@ -1,5 +1,6 @@
 import puppeteer from 'puppeteer';
 import fs from 'fs/promises';
+import readline from 'readline';
 import { KEYWORDS } from './keywords.js';
 import { getSeen, saveSeen } from '../services/storage.js';
 import { sendAlert } from '../services/mailer.js';
@@ -7,6 +8,21 @@ import { sendAlert } from '../services/mailer.js';
 const SEARCH_URL = 'https://www.linkedin.com/search/results/content/?keywords=programador&sortBy=DATE_POSTED';
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Función para esperar entrada del usuario
+const waitForUserInput = (question) => {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
+};
 
 export const runBot = async () => {
   console.log('🚀 Iniciando scraping...');
@@ -42,14 +58,13 @@ export const runBot = async () => {
 
   // 🔥 LOGIN MANUAL SOLO SI NO HAY COOKIES
   if (!hasCookies) {
-    console.log('🔐 Logéate manualmente en la ventana...');
-    console.log('⏳ Presiona ENTER en la terminal cuando ya estés logeado');
-
-    await new Promise(resolve => {
-      process.stdin.once('data', () => resolve());
-    });
-
-    console.log('✅ Login confirmado');
+    console.log('🔐 Por favor, logéate manualmente en la ventana del navegador');
+    console.log('⏳ Una vez que hayas iniciado sesión, presiona ENTER para continuar...');
+    
+    // Esperar a que el usuario presione ENTER
+    await waitForUserInput('👉 Presiona ENTER cuando hayas completado el login: ');
+    
+    console.log('✅ Login confirmado, guardando cookies...');
 
     const cookies = await page.cookies();
     await fs.writeFile('./scraper/cookies.json', JSON.stringify(cookies, null, 2));
