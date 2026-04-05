@@ -14,7 +14,7 @@ export const runBot = async () => {
   console.log('🌐 Abriendo navegador...');
 
   const browser = await puppeteer.launch({
-    headless: true, // 🔥 cambia a false SOLO para login manual
+    headless: false, // 🔥 cambia a false SOLO para login manual
     args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
 
