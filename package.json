@@ -1,0 +1,27 @@
+{
+  "name": "enquadrebot",
+  "version": "1.0.0",
+  "description": "Robot de búsqueda",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cristiansot/enquadrebot.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/cristiansot/enquadrebot/issues"
+  },
+  "homepage": "https://github.com/cristiansot/enquadrebot#readme",
+  "dependencies": {
+    "dotenv": "^17.4.0",
+    "fs-extra": "^11.3.4",
+    "node-cron": "^4.2.1",
+    "nodemailer": "^8.0.4",
+    "puppeteer": "^24.40.0"
+  }
+}
