@@ -42,18 +42,23 @@ export const runBot = async () => {
   await page.goto('https://www.linkedin.com/login', { waitUntil: 'networkidle2' });
 
   // 🔥 SOLO si NO hay cookies → login manual
-  if (!hasCookies) {
+if (!hasCookies) {
   console.log('🔐 Logéate manualmente en la ventana...');
   console.log('⏳ Presiona ENTER en la terminal cuando ya estés logeado');
 
-  // ⏸️ PAUSA REAL (no se cierra nunca)
+  // ⏸️ PAUSA REAL
   await new Promise(resolve => {
-    process.stdin.once('data', () => {
-      resolve();
-    });
+    process.stdin.once('data', () => resolve());
   });
 
   console.log('✅ Login confirmado manualmente');
+
+  // 💾 Guardar cookies
+  const cookies = await page.cookies();
+  await fs.writeFile('./scraper/cookies.json', JSON.stringify(cookies, null, 2));
+
+  console.log('💾 Cookies guardadas correctamente');
+}
 
   // 💾 Guardar cookies después del login
   const cookies = await page.cookies();
