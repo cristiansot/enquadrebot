@@ -6,7 +6,6 @@ import { sendAlert } from '../services/mailer.js';
 
 const SEARCH_URL = 'https://www.linkedin.com/search/results/content/?keywords=programador&sortBy=DATE_POSTED';
 
-// 🔧 helper delay
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const runBot = async () => {
@@ -25,9 +24,9 @@ export const runBot = async () => {
 
   const page = await browser.newPage();
 
-  // 🔑 Cargar cookies si existen
   let hasCookies = false;
 
+  // 🍪 Cargar cookies si existen
   try {
     console.log('🍪 Intentando cargar cookies...');
     const cookies = JSON.parse(await fs.readFile('./scraper/cookies.json'));
@@ -41,36 +40,21 @@ export const runBot = async () => {
   console.log('🔐 Abriendo LinkedIn...');
   await page.goto('https://www.linkedin.com/login', { waitUntil: 'networkidle2' });
 
-  // 🔥 SOLO si NO hay cookies → login manual
-if (!hasCookies) {
-  console.log('🔐 Logéate manualmente en la ventana...');
-  console.log('⏳ Presiona ENTER en la terminal cuando ya estés logeado');
+  // 🔥 LOGIN MANUAL SOLO SI NO HAY COOKIES
+  if (!hasCookies) {
+    console.log('🔐 Logéate manualmente en la ventana...');
+    console.log('⏳ Presiona ENTER en la terminal cuando ya estés logeado');
 
-  // ⏸️ PAUSA REAL
-  await new Promise(resolve => {
-    process.stdin.once('data', () => resolve());
-  });
+    await new Promise(resolve => {
+      process.stdin.once('data', () => resolve());
+    });
 
-  console.log('✅ Login confirmado manualmente');
+    console.log('✅ Login confirmado');
 
-  // 💾 Guardar cookies
-  const cookies = await page.cookies();
-  await fs.writeFile('./scraper/cookies.json', JSON.stringify(cookies, null, 2));
-
-  console.log('💾 Cookies guardadas correctamente');
-}
-
-  // 💾 Guardar cookies después del login
-  const cookies = await page.cookies();
-  await fs.writeFile('./scraper/cookies.json', JSON.stringify(cookies, null, 2));
-
-  console.log('💾 Cookies guardadas correctamente');
-}
-
-    // 💾 Guardar cookies DESPUÉS del login
-    console.log('💾 Guardando cookies...');
     const cookies = await page.cookies();
     await fs.writeFile('./scraper/cookies.json', JSON.stringify(cookies, null, 2));
+
+    console.log('💾 Cookies guardadas correctamente');
   }
 
   console.log('🔍 Buscando posts en LinkedIn...');
@@ -83,7 +67,6 @@ if (!hasCookies) {
     console.log('❌ No se encontraron posts (posible falta de login)');
   }
 
-  // 👇 Scroll humano
   console.log('🖱️ Haciendo scroll...');
   await autoScroll(page);
 
@@ -132,7 +115,6 @@ if (!hasCookies) {
   await browser.close();
 };
 
-
 // 🔽 Scroll humano
 async function autoScroll(page) {
   await page.evaluate(async () => {
@@ -153,5 +135,5 @@ async function autoScroll(page) {
   });
 }
 
-// 👇 Ejecutar automáticamente
+// ▶️ Ejecutar
 runBot();
