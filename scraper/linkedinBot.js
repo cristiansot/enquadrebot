@@ -13,10 +13,14 @@ export const runBot = async () => {
   console.log('🚀 Iniciando scraping...');
   console.log('🌐 Abriendo navegador...');
 
+const isHeadless = process.env.HEADLESS === 'true';
+
 const browser = await puppeteer.launch({
-  headless: false,
-  executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  args: ['--no-sandbox', '--disable-setuid-sandbox']
+  headless: isHeadless,
+  executablePath: isHeadless
+    ? undefined
+    : '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  args: ['--no-sandbox', '--disable-setuid-sandbox'],
 });
 
   const page = await browser.newPage();
