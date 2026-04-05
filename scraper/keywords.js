@@ -25,5 +25,8 @@ export const KEYWORDS = [
   'grabarevento',
   'grabar',
   'registro',
-  'video'
+  'video',
+  'diseño',
+  'ux/ui',
+  'Adobe'
 ];

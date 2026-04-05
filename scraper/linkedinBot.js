@@ -43,14 +43,24 @@ export const runBot = async () => {
 
   // 🔥 SOLO si NO hay cookies → login manual
   if (!hasCookies) {
-    console.log('🔐 Logéate manualmente en la ventana...');
+  console.log('🔐 Logéate manualmente en la ventana...');
+  console.log('⏳ Presiona ENTER en la terminal cuando ya estés logeado');
 
-    // ✅ ESPERA HASTA QUE ESTÉS LOGEADO (NUEVO)
-    await page.waitForSelector('div.feed-identity-module', {
-      timeout: 0
+  // ⏸️ PAUSA REAL (no se cierra nunca)
+  await new Promise(resolve => {
+    process.stdin.once('data', () => {
+      resolve();
     });
+  });
 
-    console.log('✅ Login detectado');
+  console.log('✅ Login confirmado manualmente');
+
+  // 💾 Guardar cookies después del login
+  const cookies = await page.cookies();
+  await fs.writeFile('./scraper/cookies.json', JSON.stringify(cookies, null, 2));
+
+  console.log('💾 Cookies guardadas correctamente');
+}
 
     // 💾 Guardar cookies DESPUÉS del login
     console.log('💾 Guardando cookies...');
