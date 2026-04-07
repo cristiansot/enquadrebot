@@ -3,84 +3,127 @@ import fs from 'fs/promises';
 import { KEYWORDS } from './keywords.js';
 import { getSeen, saveSeen } from '../services/storage.js';
 import { sendAlert } from '../services/mailer.js';
+import { execSync } from 'child_process';
 
 const SEARCH_URL = 'https://www.linkedin.com/search/results/content/?keywords=programador&sortBy=DATE_POSTED';
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Detectar entorno
+const isEC2 = process.env.IS_EC2 === 'true' || process.env.AWS_EXECUTION_ENV === 'AWS_EC2';
+const isMac = process.platform === 'darwin';
+
+// Obtener ruta del navegador
+const getBrowserPath = () => {
+  if (isEC2) {
+    return '/snap/bin/chromium';
+  }
+  if (isMac) {
+    return '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  }
+  return undefined; // Dejar que puppeteer encuentre uno
+};
+
 export const runBot = async () => {
   console.log('🚀 Iniciando scraping...');
+  console.log(`🖥️ Entorno: ${isEC2 ? 'EC2' : 'Mac'}`);
 
-  const browser = await puppeteer.launch({
-    headless: true,
-    executablePath: '/snap/bin/chromium',
+  const launchOptions = {
+    headless: isEC2 ? true : false,  // EC2 siempre headless, Mac visible
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-gpu'
     ],
-  });
+  };
 
+  const browserPath = getBrowserPath();
+  if (browserPath) {
+    launchOptions.executablePath = browserPath;
+    console.log(`🔧 Usando: ${browserPath}`);
+  }
+
+  const browser = await puppeteer.launch(launchOptions);
   const page = await browser.newPage();
+  
   await page.setViewport({ width: 1280, height: 800 });
   page.setDefaultTimeout(90000);
   page.setDefaultNavigationTimeout(90000);
 
   // Cargar cookies
+  let hasCookies = false;
   try {
     console.log('🍪 Cargando cookies...');
     const cookiesFile = await fs.readFile('./scraper/cookies.json', 'utf-8');
     const cookies = JSON.parse(cookiesFile);
     await page.setCookie(...cookies);
+    hasCookies = true;
     console.log('✅ Cookies cargadas');
   } catch (error) {
     console.log('⚠️ No hay cookies:', error.message);
+  }
+
+  // Si no hay cookies y estamos en Mac, hacer login manual
+  if (!hasCookies && !isEC2) {
+    console.log('\n🔐 LOGIN MANUAL REQUERIDO');
+    console.log('========================================');
+    console.log('1️⃣  Se abrirá Chrome');
+    console.log('2️⃣  Inicia sesión en LinkedIn MANUALMENTE');
+    console.log('3️⃣  Espera a que cargue tu feed');
+    console.log('========================================\n');
+    
+    await page.goto('https://www.linkedin.com/login', { 
+      waitUntil: 'domcontentloaded',
+      timeout: 60000 
+    });
+    
+    console.log('⏳ Esperando 30 segundos para que hagas login...');
+    await delay(30000);
+    
+    const cookies = await page.cookies();
+    if (cookies.length > 0) {
+      await fs.writeFile('./scraper/cookies.json', JSON.stringify(cookies, null, 2));
+      console.log(`✅ ${cookies.length} cookies guardadas`);
+      hasCookies = true;
+    }
+  }
+
+  if (!hasCookies) {
+    console.log('❌ No hay cookies válidas');
     await browser.close();
     return;
   }
 
   console.log('🔐 Accediendo a LinkedIn...');
   
-  // Primero cargar la página principal
-  await page.goto('https://www.linkedin.com/', { 
-    waitUntil: 'domcontentloaded',
-    timeout: 60000 
-  });
-  await delay(3000);
-  
-  console.log('📍 URL actual:', page.url());
-  
-  // Verificar si estamos logueados
-  const isLoggedIn = await page.evaluate(() => {
-    return document.querySelector('[data-tracking-control-name="nav-account-menu"]') !== null;
-  });
-  
-  if (!isLoggedIn) {
-    console.log('❌ No logueado. Las cookies expiraron.');
+  try {
+    await page.goto('https://www.linkedin.com/feed/', { 
+      waitUntil: 'domcontentloaded',
+      timeout: 60000 
+    });
+    await delay(3000);
+    console.log('✅ Página cargada');
+  } catch (error) {
+    console.log('❌ Error:', error.message);
     await browser.close();
     return;
   }
-  
-  console.log('✅ Sesión activa');
 
-  // Navegar a búsqueda
   console.log('🔍 Buscando posts...');
   
-  await page.goto(SEARCH_URL, { 
-    waitUntil: 'domcontentloaded', 
-    timeout: 60000 
-  });
-  await delay(5000);
-  
-  console.log('✅ Página de búsqueda cargada');
-
-  // Scroll
-  for (let i = 0; i < 3; i++) {
-    await page.evaluate(() => window.scrollBy(0, 500));
-    await delay(2000);
+  try {
+    await page.goto(SEARCH_URL, { 
+      waitUntil: 'domcontentloaded', 
+      timeout: 60000 
+    });
+    await delay(5000);
+    console.log('✅ Página de búsqueda cargada');
+  } catch (error) {
+    console.log('❌ Error:', error.message);
+    await browser.close();
+    return;
   }
 
-  // Extraer posts
   console.log('📊 Extrayendo posts...');
   
   const posts = await page.evaluate(() => {
