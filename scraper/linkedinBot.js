@@ -17,25 +17,12 @@ export const runBot = async () => {
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--disable-blink-features=AutomationControlled',
-      '--disable-features=IsolateOrigins,site-per-process',
-      '--window-size=1280,800',
-      '--lang=en-US,en',
+      '--disable-gpu'
     ],
   });
 
   const page = await browser.newPage();
-  
-  // Ocultar que es puppeteer
-  await page.evaluateOnNewDocument(() => {
-    delete navigator.__proto__.webdriver;
-    Object.defineProperty(navigator, 'webdriver', { get: () => false });
-  });
-  
   await page.setViewport({ width: 1280, height: 800 });
-  await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-  
   page.setDefaultTimeout(90000);
   page.setDefaultNavigationTimeout(90000);
 
@@ -52,54 +39,48 @@ export const runBot = async () => {
     return;
   }
 
-  // Intentar acceder con delays y reintentos
   console.log('🔐 Accediendo a LinkedIn...');
   
-  let success = false;
-  for (let i = 0; i < 3; i++) {
-    try {
-      await page.goto('https://www.linkedin.com/feed/', { 
-        waitUntil: 'domcontentloaded',
-        timeout: 60000 
-      });
-      await delay(3000 + Math.random() * 2000);
-      
-      const url = page.url();
-      if (!url.includes('login') && !url.includes('auth')) {
-        success = true;
-        console.log('✅ Sesión activa');
-        break;
-      }
-      console.log(`⚠️ Intento ${i+1}: redirigido a login`);
-      await delay(3000);
-    } catch (error) {
-      console.log(`⚠️ Intento ${i+1} falló: ${error.message}`);
-    }
-  }
-
-  if (!success) {
-    console.log('❌ No se pudo establecer sesión. Cookies expiradas.');
+  // Primero cargar la página principal
+  await page.goto('https://www.linkedin.com/', { 
+    waitUntil: 'domcontentloaded',
+    timeout: 60000 
+  });
+  await delay(3000);
+  
+  console.log('📍 URL actual:', page.url());
+  
+  // Verificar si estamos logueados
+  const isLoggedIn = await page.evaluate(() => {
+    return document.querySelector('[data-tracking-control-name="nav-account-menu"]') !== null;
+  });
+  
+  if (!isLoggedIn) {
+    console.log('❌ No logueado. Las cookies expiraron.');
     await browser.close();
     return;
   }
+  
+  console.log('✅ Sesión activa');
 
   // Navegar a búsqueda
   console.log('🔍 Buscando posts...');
   
-  try {
-    await page.goto(SEARCH_URL, { 
-      waitUntil: 'domcontentloaded', 
-      timeout: 60000 
-    });
-    await delay(5000);
-    console.log('✅ Página de búsqueda cargada');
-  } catch (error) {
-    console.log('❌ Error:', error.message);
-    await browser.close();
-    return;
+  await page.goto(SEARCH_URL, { 
+    waitUntil: 'domcontentloaded', 
+    timeout: 60000 
+  });
+  await delay(5000);
+  
+  console.log('✅ Página de búsqueda cargada');
+
+  // Scroll
+  for (let i = 0; i < 3; i++) {
+    await page.evaluate(() => window.scrollBy(0, 500));
+    await delay(2000);
   }
 
-  // Scroll y extracción
+  // Extraer posts
   console.log('📊 Extrayendo posts...');
   
   const posts = await page.evaluate(() => {
@@ -116,14 +97,16 @@ export const runBot = async () => {
 
   if (posts.length === 0) {
     console.log('⚠️ No se encontraron posts');
-    await page.screenshot({ path: './scraper/debug.png' });
-    console.log('📸 Screenshot guardado');
     await browser.close();
     return;
   }
 
   const seen = await getSeen();
-  const newPosts = posts.filter(p => p.id && !seen.includes(p.id) && KEYWORDS.some(k => p.text.toLowerCase().includes(k)));
+  const newPosts = posts.filter(p => 
+    p.id && 
+    !seen.includes(p.id) && 
+    KEYWORDS.some(k => p.text.toLowerCase().includes(k))
+  );
 
   console.log(`🧠 Nuevos posts: ${newPosts.length}`);
 
