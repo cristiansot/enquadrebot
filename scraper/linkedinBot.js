@@ -5,13 +5,11 @@ import { getSeen, saveSeen } from '../services/storage.js';
 import { sendAlert } from '../services/mailer.js';
 
 const SEARCH_URL = 'https://www.linkedin.com/search/results/content/?keywords=programador&sortBy=DATE_POSTED';
-
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const runBot = async () => {
-  console.log('🚀 Iniciando scraping en EC2...');
-  
-  // Configuración mejorada para EC2
+  console.log('🚀 Iniciando scraping...');
+
   const browser = await puppeteer.launch({
     headless: true,
     executablePath: '/snap/bin/chromium',
@@ -20,36 +18,33 @@ export const runBot = async () => {
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-gpu',
-      '--disable-software-rasterizer',
-      '--disable-extensions',
-      '--disable-sync',
-      '--no-first-run',
-      '--no-default-browser-check',
       '--disable-blink-features=AutomationControlled',
       '--disable-features=IsolateOrigins,site-per-process',
-      '--window-size=1280,800'
+      '--window-size=1280,800',
+      '--lang=en-US,en',
     ],
   });
 
   const page = await browser.newPage();
   
+  // Ocultar que es puppeteer
+  await page.evaluateOnNewDocument(() => {
+    delete navigator.__proto__.webdriver;
+    Object.defineProperty(navigator, 'webdriver', { get: () => false });
+  });
+  
   await page.setViewport({ width: 1280, height: 800 });
+  await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
   
-  // Timeouts más largos (120 segundos)
-  page.setDefaultTimeout(120000);
-  page.setDefaultNavigationTimeout(120000);
-  
-  // User-Agent realista
-  await page.setUserAgent('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+  page.setDefaultTimeout(90000);
+  page.setDefaultNavigationTimeout(90000);
 
   // Cargar cookies
-  let hasCookies = false;
   try {
     console.log('🍪 Cargando cookies...');
     const cookiesFile = await fs.readFile('./scraper/cookies.json', 'utf-8');
     const cookies = JSON.parse(cookiesFile);
     await page.setCookie(...cookies);
-    hasCookies = true;
     console.log('✅ Cookies cargadas');
   } catch (error) {
     console.log('⚠️ No hay cookies:', error.message);
@@ -57,41 +52,36 @@ export const runBot = async () => {
     return;
   }
 
-  // Navegar a LinkedIn con reintentos
+  // Intentar acceder con delays y reintentos
   console.log('🔐 Accediendo a LinkedIn...');
   
-  let connected = false;
+  let success = false;
   for (let i = 0; i < 3; i++) {
     try {
       await page.goto('https://www.linkedin.com/feed/', { 
         waitUntil: 'domcontentloaded',
         timeout: 60000 
       });
-      await delay(5000);
-      connected = true;
-      console.log('✅ Conectado a LinkedIn');
-      break;
-    } catch (error) {
-      console.log(`⚠️ Intento ${i + 1} falló: ${error.message}`);
+      await delay(3000 + Math.random() * 2000);
+      
+      const url = page.url();
+      if (!url.includes('login') && !url.includes('auth')) {
+        success = true;
+        console.log('✅ Sesión activa');
+        break;
+      }
+      console.log(`⚠️ Intento ${i+1}: redirigido a login`);
       await delay(3000);
+    } catch (error) {
+      console.log(`⚠️ Intento ${i+1} falló: ${error.message}`);
     }
   }
-  
-  if (!connected) {
-    console.log('❌ No se pudo conectar a LinkedIn');
-    await browser.close();
-    return;
-  }
 
-  // Verificar si estamos logueados
-  const currentUrl = page.url();
-  if (currentUrl.includes('login') || currentUrl.includes('auth')) {
-    console.log('❌ Sesión expirada. Necesitas generar nuevas cookies');
+  if (!success) {
+    console.log('❌ No se pudo establecer sesión. Cookies expiradas.');
     await browser.close();
     return;
   }
-  
-  console.log('✅ Sesión activa - URL:', currentUrl);
 
   // Navegar a búsqueda
   console.log('🔍 Buscando posts...');
@@ -101,50 +91,17 @@ export const runBot = async () => {
       waitUntil: 'domcontentloaded', 
       timeout: 60000 
     });
-    await delay(8000);
+    await delay(5000);
     console.log('✅ Página de búsqueda cargada');
   } catch (error) {
-    console.log('❌ Error en búsqueda:', error.message);
+    console.log('❌ Error:', error.message);
     await browser.close();
     return;
   }
 
-  // Buscar posts
-  let postsFound = false;
-  for (let i = 0; i < 5; i++) {
-    console.log(`⏳ Buscando posts... intento ${i + 1}/5`);
-    
-    await page.evaluate(() => window.scrollBy(0, 300));
-    await delay(2000);
-    
-    const hasPosts = await page.evaluate(() => {
-      return document.querySelectorAll('[data-urn], .feed-shared-update-v2').length > 0;
-    });
-    
-    if (hasPosts) {
-      postsFound = true;
-      console.log('✅ Posts encontrados');
-      break;
-    }
-  }
-
-  if (!postsFound) {
-    console.log('⚠️ No se encontraron posts');
-    await page.screenshot({ path: './scraper/debug.png' });
-    console.log('📸 Screenshot guardado');
-    await browser.close();
-    return;
-  }
-
-  // Scroll para cargar más
-  console.log('🖱️ Scroll para cargar más...');
-  for (let i = 0; i < 4; i++) {
-    await page.evaluate(() => window.scrollBy(0, 500));
-    await delay(2000);
-  }
-
-  // Extraer posts
-  console.log('📊 Extrayendo datos...');
+  // Scroll y extracción
+  console.log('📊 Extrayendo posts...');
+  
   const posts = await page.evaluate(() => {
     const elements = document.querySelectorAll('[data-urn]');
     return Array.from(elements).map(el => ({
@@ -158,35 +115,27 @@ export const runBot = async () => {
   console.log(`📦 Total posts: ${posts.length}`);
 
   if (posts.length === 0) {
-    console.log('⚠️ No se extrajeron posts');
+    console.log('⚠️ No se encontraron posts');
+    await page.screenshot({ path: './scraper/debug.png' });
+    console.log('📸 Screenshot guardado');
     await browser.close();
     return;
   }
 
-  // Filtrar
   const seen = await getSeen();
-  console.log(`👀 Vistos: ${seen.length}`);
-
-  const newPosts = posts.filter(p =>
-    p.id &&
-    !seen.includes(p.id) &&
-    KEYWORDS.some(k => p.text.toLowerCase().includes(k))
-  );
+  const newPosts = posts.filter(p => p.id && !seen.includes(p.id) && KEYWORDS.some(k => p.text.toLowerCase().includes(k)));
 
   console.log(`🧠 Nuevos posts: ${newPosts.length}`);
 
   if (newPosts.length > 0) {
-    console.log(`📧 Enviando ${newPosts.length} alertas...`);
     await sendAlert(newPosts);
     const updatedSeen = [...seen, ...newPosts.map(p => p.id)];
     await saveSeen(updatedSeen);
     console.log('✅ Alertas enviadas');
-  } else {
-    console.log('😴 No hay posts nuevos');
   }
 
-  console.log('✨ Proceso completado');
   await browser.close();
+  console.log('✨ Proceso completado');
 };
 
 runBot().catch(console.error);
