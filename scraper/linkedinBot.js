@@ -25,111 +25,108 @@ export const runBot = async () => {
   // Obtener CSRF token
   const csrfToken = cookies.find(c => c.name === 'JSESSIONID')?.value?.replace(/"/g, '') || '';
 
-  console.log('🔍 Buscando posts con keyword: programador');
-  console.log('🌐 Haciendo request a LinkedIn API...');
+  console.log('🔍 Obteniendo posts del feed...');
 
   const headers = {
     'Cookie': cookieString,
     'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Accept': 'application/json',
     'csrf-token': csrfToken,
-    'Referer': 'https://www.linkedin.com/'
+    'Referer': 'https://www.linkedin.com/feed/'
   };
 
-  const url = 'https://www.linkedin.com/voyager/api/content/search';
-  const params = {
-    q: 'all',
-    keywords: 'programador',
-    count: 50
-  };
+  // Endpoint del feed (más estable que search)
+  const url = 'https://www.linkedin.com/voyager/api/feed/updates';
 
   try {
-    console.log('📡 Enviando petición...');
-    const response = await axios.get(url, { headers, params });
+    console.log('📡 Enviando petición al feed...');
+    const response = await axios.get(url, { 
+      headers, 
+      params: {
+        count: 50,
+        start: 0
+      }
+    });
     
-    console.log('📊 Status de respuesta:', response.status);
-    console.log('📊 Hay datos?', !!response.data);
+    console.log('📊 Status:', response.status);
     
-    const elements = response.data?.data?.elements || [];
-    console.log(`📦 Posts encontrados en API: ${elements.length}`);
+    const elements = response.data?.data?.elements || response.data?.elements || [];
+    console.log(`📦 Posts encontrados: ${elements.length}`);
     
     if (elements.length === 0) {
-      console.log('⚠️ No se encontraron posts. Verifica:');
-      console.log('   1. Que las cookies sean válidas');
-      console.log('   2. Que tengas sesión activa en LinkedIn');
-      console.log('   3. Que la keyword "programador" tenga resultados');
+      console.log('⚠️ No se encontraron posts. Las cookies pueden haber expirado.');
       return;
     }
     
-    // Mostrar los primeros 3 posts como ejemplo
-    console.log('\n📝 Ejemplo de posts encontrados:');
+    // Mostrar ejemplos
+    console.log('\n📝 Ejemplo de posts:');
     elements.slice(0, 3).forEach((el, i) => {
-      const text = el.content?.text?.text || '';
+      const update = el.update || el;
+      const content = update.content || update;
+      const text = content.text || content.commentary || '';
+      const author = update.actor?.name || 'Desconocido';
       console.log(`\nPost ${i + 1}:`);
-      console.log(`   Autor: ${el.author?.name || 'Desconocido'}`);
+      console.log(`   Autor: ${author}`);
       console.log(`   Texto: ${text.substring(0, 150)}...`);
     });
     
-    const posts = elements.map(el => ({
-      id: el.urn,
-      text: el.content?.text?.text || '',
-      author: el.author?.name || 'Desconocido',
-      url: `https://www.linkedin.com/feed/update/${el.urn}`
-    }));
+    // Extraer posts
+    const posts = elements.map(el => {
+      const update = el.update || el;
+      const content = update.content || update;
+      const text = content.text || content.commentary || '';
+      const author = update.actor?.name || 'Desconocido';
+      const id = update.urn || el.urn || `post_${Date.now()}_${Math.random()}`;
+      
+      return {
+        id: id,
+        text: text.substring(0, 1000),
+        author: author,
+        url: `https://www.linkedin.com/feed/update/${id}`
+      };
+    }).filter(p => p.text.length > 0);
+    
+    console.log(`\n📝 Posts con texto: ${posts.length}`);
     
     const seen = await getSeen();
-    console.log(`\n👀 Posts ya vistos en storage: ${seen.length}`);
+    console.log(`👀 Posts ya vistos: ${seen.length}`);
     
-    // Mostrar qué posts coinciden con keywords
+    // Filtrar por keywords
     console.log('\n🔍 Filtrando por keywords...');
     const newPosts = posts.filter(p => {
-      if (!p.id) return false;
       if (seen.includes(p.id)) return false;
-      
       const textLower = p.text.toLowerCase();
-      const matchedKeyword = KEYWORDS.find(k => textLower.includes(k.toLowerCase()));
-      
-      if (matchedKeyword) {
-        console.log(`   ✅ Match encontrado: "${matchedKeyword}" en post de ${p.author}`);
-      }
-      
-      return matchedKeyword;
+      const matched = KEYWORDS.some(k => textLower.includes(k.toLowerCase()));
+      if (matched) console.log(`   ✅ Match: "${p.author}"`);
+      return matched;
     });
     
     console.log(`\n🧠 Posts nuevos con keywords: ${newPosts.length}`);
     
     if (newPosts.length > 0) {
       console.log('\n📧 Enviando alertas...');
-      newPosts.forEach((post, idx) => {
-        console.log(`\n📝 Post ${idx + 1} - Autor: ${post.author}`);
-        console.log(`   Preview: ${post.text.substring(0, 200)}...`);
-      });
-      
       await sendAlert(newPosts);
       const updatedSeen = [...seen, ...newPosts.map(p => p.id)];
       await saveSeen(updatedSeen);
-      console.log('✅ Alertas enviadas y posts marcados como vistos');
+      console.log('✅ Alertas enviadas');
     } else {
       console.log('\n😴 No hay posts nuevos que coincidan con las keywords');
-      console.log('💡 Sugerencia: Revisa que las keywords en keywords.js sean correctas');
     }
     
     console.log('\n✨ Proceso completado');
     
   } catch (error) {
-    console.error('❌ Error en la petición:');
-    console.error('   Status:', error.response?.status);
-    console.error('   Mensaje:', error.response?.data || error.message);
+    console.error('❌ Error:', error.response?.status, error.response?.statusText);
+    console.error('   Mensaje:', error.message);
     
     if (error.response?.status === 401 || error.response?.status === 403) {
-      console.log('\n⚠️ Las cookies expiraron. Debes generar nuevas cookies en tu Mac:');
+      console.log('\n⚠️ Las cookies expiraron. Genera nuevas en tu Mac:');
       console.log('   1. cd ~/Desktop/enquadrebot');
       console.log('   2. HEADLESS=false node index.js');
-      console.log('   3. Haz login manual');
-      console.log('   4. Sube scraper/cookies.json a EC2 con git push');
+      console.log('   3. git add scraper/cookies.json && git commit -m "update cookies" && git push');
+      console.log('   4. En EC2: git pull origin main');
     }
   }
 };
 
-// Ejecutar directamente
 runBot();
