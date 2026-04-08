@@ -19,6 +19,7 @@
   },
   "homepage": "https://github.com/cristiansot/enquadrebot#readme",
   "dependencies": {
+    "@celeria-ai/linkedin-mcp": "^0.4.0",
     "dotenv": "^17.4.0",
     "fs-extra": "^11.3.4",
     "node-cron": "^4.2.1",
