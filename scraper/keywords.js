@@ -28,5 +28,5 @@ export const KEYWORDS = [
   'video',
   'diseño',
   'ux/ui',
-  'Adobe'
+  'adobe'
 ];
