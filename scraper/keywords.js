@@ -26,14 +26,4 @@ export const KEYWORDS = [
   'grabar',
   'registro',
   'video',
-  'diseño',
-  'ux/ui',
-  'adobe',
-  'marketing',
-  'ventas',
-  'estrategia',
-  'negocios',
-  'consultor',
-  'empresa',
-  'programador'
 ];
