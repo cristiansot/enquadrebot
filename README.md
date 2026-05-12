@@ -1,6 +1,7 @@
 # enquadrebot
 Robot de búsqueda
 
+```bash
 EC2 (Node.js)
 │
 ├── scraper/
@@ -17,3 +18,4 @@ EC2 (Node.js)
 │   └── cron.js
 │
 └── index.js
+```
